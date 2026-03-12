@@ -630,6 +630,12 @@ function renderList() {
       </button>
     </div>
     ${pinnedHTML}
+    <div class="list-radius">
+      <span>// radio</span>
+      <input type="range" min="50" max="1000" step="50" value="${list.radius||200}"
+        oninput="updateListRadius('${list.id}',this.value)">
+      <span id="radius-label-${list.id}">${list.radius||200} m</span>
+    </div>
 
     ${list.items.length>0?`
       <div class="progress-line">

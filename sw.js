@@ -3,7 +3,7 @@
 // Maneja notificaciones en background
 // ═══════════════════════════════════════
 
-const CACHE_NAME = 'listago-v1';
+const CACHE_NAME = 'lalistita-v4';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install: cachear archivos
