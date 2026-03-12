@@ -421,6 +421,25 @@
     font-size: 1.1rem;
     padding: 0 4px;
   }
+  /* ── RADIUS SLIDER per list ── */
+  .list-radius {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 14px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .list-radius input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+    height: 3px;
+  }
+  .list-radius span { color: var(--ink2); font-weight: 500; min-width: 42px; text-align: right; }
+
   /* Extra padding at bottom of list so compose bar doesn't cover items */
   #list-panel { padding-bottom: 60px; }
 
@@ -463,10 +482,6 @@
     <div class="sidebar-label">// listas</div>
     <div id="sidebar-lists"></div>
     <div class="sidebar-new" onclick="showModal()">+ nueva lista</div>
-    <div class="sidebar-radar">
-      <div>radio: <span id="radius-label">300 m</span></div>
-      <input type="range" id="radius-slider" min="50" max="1000" step="50" value="300">
-    </div>
   </div>
 
   <!-- Contenido principal -->
@@ -524,13 +539,13 @@
 const SYMBOLS = ['⚒','◉','⊞','✂','⊛','⌘','⚗','⊕','⊜','⌂','⊟','⍟','∞','⌬','⊡'];
 
 const DEFAULT_LISTS = [
-  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'pinned', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[] },
-  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'pinned', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[] },
-  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'pinned',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[] },
+  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'pinned', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[], radius:200 },
+  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'pinned', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[], radius:200 },
+  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'pinned',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[],radius:200 },
 ];
 
 let state = {
-  lists:[], activeList:null, radius:300,
+  lists:[], activeList:null,
   userPos:null, nearbyPlaces:[], notified:{},
 };
 let map=null, userMarker=null, placeMarkers=[], mapExpanded=false;
@@ -545,10 +560,12 @@ function load() {
     const raw = localStorage.getItem('lalistita_v2') || localStorage.getItem('lalistita_v1') || localStorage.getItem('listago_v2');
     if (raw) { const d=JSON.parse(raw); state.lists=d.lists||DEFAULT_LISTS; state.radius=d.radius||300; }
     else state.lists=DEFAULT_LISTS;
-    // Migrar listas viejas sin mode/pinnedPlaces
+    // Migrar listas viejas
+    const oldRadius = d.radius || 200;
     state.lists.forEach(l => {
       if (!l.mode) l.mode = 'search';
       if (!l.pinnedPlaces) l.pinnedPlaces = [];
+      if (!l.radius) l.radius = oldRadius; // migrar radio global a por lista
     });
   } catch(e) { state.lists=DEFAULT_LISTS; }
   state.activeList=state.lists[0]?.id||null;
@@ -558,8 +575,7 @@ function load() {
 function render() {
   renderSidebar();
   renderList();
-  document.getElementById('radius-label').textContent = state.radius+' m';
-  document.getElementById('radius-slider').value = state.radius;
+
 }
 
 function renderSidebar() {
@@ -796,6 +812,15 @@ function deleteItem(id) {
   }
 }
 
+function updateListRadius(listId, val) {
+  const list = state.lists.find(l=>l.id===listId);
+  if (!list) return;
+  list.radius = parseInt(val);
+  const label = document.getElementById('radius-label-'+listId);
+  if (label) label.textContent = list.radius+' m';
+  save();
+}
+
 function toggleListMode(listId) {
   const list=state.lists.find(l=>l.id===listId);
   if (!list) return;
@@ -900,13 +925,6 @@ function toggleMap() {
 }
 
 // ── RADIUS ──
-document.getElementById('radius-slider').addEventListener('input', function() {
-  state.radius=parseInt(this.value);
-  document.getElementById('radius-label').textContent=state.radius+' m';
-  save();
-  if (state.userPos) searchNearby();
-});
-
 // ── GEOLOCATION ──
 function requestLocation() {
   if (!navigator.geolocation) { showToast('📍','error','sin soporte de geolocalización',4000); return; }
@@ -1034,7 +1052,8 @@ function searchNearby(force=false) {
   if (!listsSearch.length) { updateStatusBar(); return; }
 
   const service=new google.maps.places.PlacesService(map);
-  const searchRadius=Math.max(state.radius,1000);
+  const maxRadius=Math.max(...state.lists.map(l=>l.radius||200), 1000);
+  const searchRadius=maxRadius;
   const center=new google.maps.LatLng(state.userPos.lat,state.userPos.lng);
   let allPlaces=[]; let pending=4;
 
@@ -1048,8 +1067,10 @@ function searchNearby(force=false) {
       allPlaces.forEach(place=>{
         if(!place.geometry)return;
         const pp={lat:place.geometry.location.lat(),lng:place.geometry.location.lng()};
-        if(distanceBetween(state.userPos,pp)>state.radius)return;
+        const dist=distanceBetween(state.userPos,pp);
         const match=matchPlaceToList(place,listsSearch);
+        if(match && dist>( match.radius||200))return;
+        if(!match && dist>1000)return;
         addPlaceMarker(place,match);
         if(match) checkNotify(place,match);
       });
@@ -1068,7 +1089,7 @@ function checkPinnedPlaces() {
   pinnedLists.forEach(list=>{
     list.pinnedPlaces.forEach(place=>{
       const dist=distanceBetween(state.userPos,{lat:place.lat,lng:place.lng});
-      if(dist<=state.radius) {
+      if(dist<=(list.radius||200)) {
         checkNotifyPinned(place,list,dist);
       }
     });
@@ -1136,6 +1157,7 @@ function checkNotify(place,list) {
   if(!pending.length)return;
   state.notified[key]=true;
   const items=pending.slice(0,4).map(i=>`• ${i.name}`).join('\n')+(pending.length>4?`\n…y ${pending.length-4} más`:'');
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
   showToastWithGo(list.emoji,`${list.name} cerca — ${place.name}`,items,place.place_id,place.name,list.id);
   sendNativeNotification(list,place.name);
 }
@@ -1223,7 +1245,7 @@ function createList(){
   const name=document.getElementById('new-list-name').value.trim();
   if(!name)return;
   const id='list_'+Date.now();
-  state.lists.push({id,name,emoji:selectedSym,mode:selectedMode,pinnedPlaces:[],keywords:[name.toLowerCase()],items:[]});
+  state.lists.push({id,name,emoji:selectedSym,mode:selectedMode,pinnedPlaces:[],keywords:[name.toLowerCase()],items:[],radius:200});
   state.activeList=id;
   hideModal();save();render();
 }
