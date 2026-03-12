@@ -1,20 +1,13 @@
-// ═══════════════════════════════════════
-// ListaGo — Service Worker v1.0
-// Maneja notificaciones en background
-// ═══════════════════════════════════════
+const CACHE_NAME = 'lalistita-v5';
+const STATIC_ASSETS = ['/manifest.json', '/icon-192.png', '/icon-512.png'];
 
-const CACHE_NAME = 'lalistita-v4';
-const ASSETS = ['/', '/index.html', '/manifest.json'];
-
-// ── Install: cachear archivos
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
 
-// ── Activate: limpiar caches viejos
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -24,26 +17,27 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// ── Fetch: servir desde cache si está disponible
 self.addEventListener('fetch', e => {
+  // Nunca cachear el HTML — siempre traer fresco de la red
+  if (e.request.url.endsWith('.html') || e.request.url.endsWith('/')) {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
 
-// ── Recibir mensaje de la app principal
 self.addEventListener('message', e => {
   if (e.data?.type === 'NOTIFY_NEARBY') {
     const { listName, listEmoji, placeName, items } = e.data;
     const body = items.slice(0, 4).join('\n') + (items.length > 4 ? `\n…y ${items.length - 4} más` : '');
-
     self.registration.showNotification(`${listEmoji} ${listName} cerca`, {
       body: `📍 ${placeName}\n${body}`,
       icon: 'icon-192.png',
       badge: 'icon-192.png',
-      tag: `listago-${listName}`,
+      tag: `lalistita-${listName}`,
       renotify: true,
-      requireInteraction: false,
       vibrate: [200, 100, 200],
       data: { listName, url: '/index.html' },
       actions: [
@@ -54,26 +48,15 @@ self.addEventListener('message', e => {
   }
 });
 
-// ── Click en notificación
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   if (e.action === 'dismiss') return;
-
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
-        if (client.url.includes('index.html') && 'focus' in client) {
-          return client.focus();
-        }
+        if ('focus' in client) return client.focus();
       }
-      return clients.openWindow('/index.html');
+      return clients.openWindow('/');
     })
   );
-});
-
-// ── Background sync (por si acaso)
-self.addEventListener('sync', e => {
-  if (e.tag === 'check-location') {
-    console.log('[SW] Background sync triggered');
-  }
 });

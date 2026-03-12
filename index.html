@@ -539,9 +539,9 @@
 const SYMBOLS = ['⚒','◉','⊞','✂','⊛','⌘','⚗','⊕','⊜','⌂','⊟','⍟','∞','⌬','⊡'];
 
 const DEFAULT_LISTS = [
-  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'pinned', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[], radius:200 },
-  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'pinned', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[], radius:200 },
-  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'pinned',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[],radius:200 },
+  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'search', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[], radius:200 },
+  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'search', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[], radius:200 },
+  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'search',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[],radius:200 },
 ];
 
 let state = {
@@ -1037,14 +1037,21 @@ function searchNearby(force=false) {
   // Verificar locales fijos primero (no necesitan mapa ni Places)
   checkPinnedPlaces();
 
-  if (!map) return; // El resto necesita mapa
+  // Crear servicio aunque el mapa esté colapsado
+  if (!window._placesServiceDiv) {
+    window._placesServiceDiv = document.createElement('div');
+    window._placesServiceMap = new google.maps.Map(window._placesServiceDiv, {
+      center: state.userPos, zoom: 15
+    });
+  }
+  const serviceMap = map || window._placesServiceMap;
 
   const now=Date.now();
   const movedFar=!placeCache.pos||distanceBetween(placeCache.pos,state.userPos)>SEARCH_CACHE_DISTANCE;
   const expired=(now-placeCache.timestamp)>SEARCH_CACHE_TTL;
 
   if (!force&&!movedFar&&!expired&&placeCache.places.length) {
-    const listsSearch=state.lists.filter(l=>l.mode==='search'&&l.items.some(i=>!i.done));
+    const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done));
     placeCache.places.forEach(place=>{
       const match=matchPlaceToList(place,listsSearch);
       if(match) checkNotify(place,match);
@@ -1054,10 +1061,11 @@ function searchNearby(force=false) {
 
   placeMarkers.forEach(m=>m.setMap(null));
   placeMarkers=[]; state.nearbyPlaces=[];
-  const listsSearch=state.lists.filter(l=>l.mode==='search'&&l.items.some(i=>!i.done));
+  // Buscar para listas en modo search, O listas en modo pinned sin locales vinculados
+  const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done));
   if (!listsSearch.length) { updateStatusBar(); return; }
 
-  const service=new google.maps.places.PlacesService(map);
+  const service=new google.maps.places.PlacesService(serviceMap);
   const maxRadius=Math.max(...state.lists.map(l=>l.radius||200), 1000);
   const searchRadius=maxRadius;
   const center=new google.maps.LatLng(state.userPos.lat,state.userPos.lng);
@@ -1115,7 +1123,6 @@ function checkPinnedPlaces() {
     });
   }
   renderSidebar(); // update distance labels
-  render();
 }
 
 function checkNotifyPinned(place, list, dist) {
@@ -1143,7 +1150,7 @@ function matchPlaceToList(place,lists) {
 }
 
 function addPlaceMarker(place,matchedList) {
-  if(!map||!place.geometry)return;
+  if(!map||!place.geometry)return; // solo mostrar marcador si mapa está abierto
   const marker=new google.maps.Marker({
     position:place.geometry.location,map,title:place.name,
     icon:{path:google.maps.SymbolPath.CIRCLE,scale:matchedList?8:5,fillColor:matchedList?'#2d5a27':'#c4bfb4',fillOpacity:0.85,strokeColor:'#f5f0e8',strokeWeight:2},
@@ -1318,7 +1325,7 @@ async function installApp(){
 window.addEventListener('appinstalled',()=>showToast('🎉','listo','lalistita instalada correctamente',4000));
 
 // ── INIT ──
-load(); render(); registerSW(); requestNotificationPermission();
+load(); state.notified={}; render(); registerSW(); requestNotificationPermission();
 if('permissions'in navigator){
   navigator.permissions.query({name:'geolocation'}).then(result=>{
     if(result.state==='granted') requestLocation();
