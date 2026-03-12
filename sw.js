@@ -1,31 +1,21 @@
-const CACHE_NAME = 'lalistita-v5';
-const STATIC_ASSETS = ['/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE_NAME = 'lalistita-v6';
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
+// No caching — always fetch fresh
 self.addEventListener('fetch', e => {
-  // Nunca cachear el HTML — siempre traer fresco de la red
-  if (e.request.url.endsWith('.html') || e.request.url.endsWith('/')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-    return;
-  }
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
+  e.respondWith(fetch(e.request).catch(() => new Response('offline')));
 });
 
 self.addEventListener('message', e => {
@@ -39,7 +29,7 @@ self.addEventListener('message', e => {
       tag: `lalistita-${listName}`,
       renotify: true,
       vibrate: [200, 100, 200],
-      data: { listName, url: '/index.html' },
+      data: { url: self.registration.scope },
       actions: [
         { action: 'open', title: 'Ver lista' },
         { action: 'dismiss', title: 'Ignorar' }
@@ -52,11 +42,9 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   if (e.action === 'dismiss') return;
   e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if ('focus' in client) return client.focus();
-      }
-      return clients.openWindow('/');
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      if (list.length) return list[0].focus();
+      return clients.openWindow(self.registration.scope);
     })
   );
 });
