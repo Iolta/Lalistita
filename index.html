@@ -539,9 +539,9 @@
 const SYMBOLS = ['⚒','◉','⊞','✂','⊛','⌘','⚗','⊕','⊜','⌂','⊟','⍟','∞','⌬','⊡'];
 
 const DEFAULT_LISTS = [
-  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'search', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[], radius:200 },
-  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'search', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[], radius:200 },
-  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'search',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[],radius:200 },
+  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'search', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[], radius:50 },
+  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'search', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[], radius:50 },
+  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'search',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[],radius:50 },
 ];
 
 let state = {
@@ -553,15 +553,15 @@ let pinningListId = null;
 
 // ── STORAGE ──
 function save() {
-  try { localStorage.setItem('lalistita_v2', JSON.stringify({lists:state.lists,radius:state.radius})); } catch(e){}
+  try { localStorage.setItem('lalistita_v2', JSON.stringify({lists:state.lists})); } catch(e){}
 }
 function load() {
   try {
     const raw = localStorage.getItem('lalistita_v2') || localStorage.getItem('lalistita_v1') || localStorage.getItem('listago_v2');
-    if (raw) { const d=JSON.parse(raw); state.lists=d.lists||DEFAULT_LISTS; state.radius=d.radius||300; }
+    if (raw) { const d=JSON.parse(raw); state.lists=d.lists||DEFAULT_LISTS; }
     else state.lists=DEFAULT_LISTS;
     // Migrar listas viejas
-    const oldRadius = d.radius || 200;
+    const oldRadius = d.radius || 50;
     state.lists.forEach(l => {
       if (!l.mode) l.mode = 'search';
       if (!l.pinnedPlaces) l.pinnedPlaces = [];
@@ -632,9 +632,9 @@ function renderList() {
     ${pinnedHTML}
     <div class="list-radius">
       <span>// radio</span>
-      <input type="range" min="50" max="1000" step="50" value="${list.radius||200}"
+      <input type="range" min="50" max="500" step="50" value="${list.radius||50}"
         oninput="updateListRadius('${list.id}',this.value)">
-      <span id="radius-label-${list.id}">${list.radius||200} m</span>
+      <span id="radius-label-${list.id}">${list.radius||50} m</span>
     </div>
 
     ${list.items.length>0?`
@@ -1066,8 +1066,7 @@ function searchNearby(force=false) {
   if (!listsSearch.length) { updateStatusBar(); return; }
 
   const service=new google.maps.places.PlacesService(serviceMap);
-  const maxRadius=Math.max(...state.lists.map(l=>l.radius||200), 1000);
-  const searchRadius=maxRadius;
+  const searchRadius=Math.max(...state.lists.map(l=>l.radius||50));
   const center=new google.maps.LatLng(state.userPos.lat,state.userPos.lng);
   let allPlaces=[]; let pending=4;
 
@@ -1083,7 +1082,7 @@ function searchNearby(force=false) {
         const pp={lat:place.geometry.location.lat(),lng:place.geometry.location.lng()};
         const dist=distanceBetween(state.userPos,pp);
         const match=matchPlaceToList(place,listsSearch);
-        if(match && dist>( match.radius||200))return;
+        if(match && dist>( match.radius||50))return;
         if(!match && dist>1000)return;
         addPlaceMarker(place,match);
         if(match) checkNotify(place,match);
@@ -1103,7 +1102,7 @@ function checkPinnedPlaces() {
   pinnedLists.forEach(list=>{
     list.pinnedPlaces.forEach(place=>{
       const dist=distanceBetween(state.userPos,{lat:place.lat,lng:place.lng});
-      if(dist<=(list.radius||200)) {
+      if(dist<=(list.radius||50)) {
         checkNotifyPinned(place,list,dist);
       }
     });
@@ -1258,7 +1257,7 @@ function createList(){
   const name=document.getElementById('new-list-name').value.trim();
   if(!name)return;
   const id='list_'+Date.now();
-  state.lists.push({id,name,emoji:selectedSym,mode:selectedMode,pinnedPlaces:[],keywords:[name.toLowerCase()],items:[],radius:200});
+  state.lists.push({id,name,emoji:selectedSym,mode:selectedMode,pinnedPlaces:[],keywords:[name.toLowerCase()],items:[],radius:50});
   state.activeList=id;
   hideModal();save();render();
 }
@@ -1282,8 +1281,11 @@ const LIGHT_STYLE=[
 // ── SERVICE WORKER ──
 let swRegistration=null;
 async function registerSW(){
-  if(!('serviceWorker'in navigator))return;
-  try{swRegistration=await navigator.serviceWorker.register('sw.js');}catch(e){}
+  // Desregistrar SW viejo si existe
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const reg of regs) await reg.unregister();
+  }
 }
 
 // ── NOTIFICACIONES ──
@@ -1325,7 +1327,7 @@ async function installApp(){
 window.addEventListener('appinstalled',()=>showToast('🎉','listo','lalistita instalada correctamente',4000));
 
 // ── INIT ──
-load(); state.notified={}; render(); registerSW(); requestNotificationPermission();
+load(); state.notified={}; render(); requestNotificationPermission(); /* SW desactivado */
 if('permissions'in navigator){
   navigator.permissions.query({name:'geolocation'}).then(result=>{
     if(result.state==='granted') requestLocation();
