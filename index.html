@@ -979,7 +979,7 @@ function updateStatusBar() {
 }
 
 // ── PLACE CACHE ──
-const SEARCH_CACHE_DISTANCE=500;
+const SEARCH_CACHE_DISTANCE=200;
 const SEARCH_CACHE_TTL=5*60*1000;
 let placeCache={pos:null,timestamp:0,places:[]};
 
@@ -1010,10 +1010,18 @@ function searchNearby(force=false) {
 
   if (!force&&!movedFar&&!expired&&placeCache.places.length) {
     const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done));
+    const closestPerList = {};
     placeCache.places.forEach(place=>{
+      if(!place.geometry) return;
+      const pp={lat:place.geometry.location.lat(),lng:place.geometry.location.lng()};
+      const dist=distanceBetween(state.userPos,pp);
       const match=matchPlaceToList(place,listsSearch);
-      if(match) checkNotify(place,match);
+      if(!match || dist>(match.radius||50)) return;
+      if(!closestPerList[match.id] || dist < closestPerList[match.id].dist) {
+        closestPerList[match.id] = {place, list: match, dist};
+      }
     });
+    Object.values(closestPerList).forEach(({place, list}) => checkNotify(place, list));
     updateNearbyChips(); updateStatusBar(); return;
   }
 
@@ -1035,16 +1043,23 @@ function searchNearby(force=false) {
       const seen=new Set();
       allPlaces=allPlaces.filter(p=>{if(seen.has(p.place_id))return false;seen.add(p.place_id);return true;});
       placeCache={pos:{...state.userPos},timestamp:Date.now(),places:allPlaces};
+      // Para cada lista, encontrar el local más cercano dentro del radio
+      const closestPerList = {};
       allPlaces.forEach(place=>{
         if(!place.geometry)return;
         const pp={lat:place.geometry.location.lat(),lng:place.geometry.location.lng()};
         const dist=distanceBetween(state.userPos,pp);
         const match=matchPlaceToList(place,listsSearch);
-        if(match && dist>( match.radius||50))return;
-        if(!match && dist>1000)return;
-        addPlaceMarker(place,match);
-        if(match) checkNotify(place,match);
+        addPlaceMarker(place, match && dist<=(match.radius||50) ? match : null);
+        if(!match) return;
+        if(dist>(match.radius||50)) return;
+        // Guardar solo el más cercano por lista
+        if(!closestPerList[match.id] || dist < closestPerList[match.id].dist) {
+          closestPerList[match.id] = {place, list: match, dist};
+        }
       });
+      // Notificar solo el más cercano de cada lista
+      Object.values(closestPerList).forEach(({place, list}) => checkNotify(place, list));
       updateNearbyChips(); updateStatusBar();
     }
   };
@@ -1058,12 +1073,15 @@ function checkPinnedPlaces() {
   if (!state.userPos) return;
   const pinnedLists=state.lists.filter(l=>l.mode==='pinned'&&l.pinnedPlaces.length&&l.items.some(i=>!i.done));
   pinnedLists.forEach(list=>{
+    // Solo notificar el local fijo más cercano dentro del radio
+    let closest = null;
     list.pinnedPlaces.forEach(place=>{
       const dist=distanceBetween(state.userPos,{lat:place.lat,lng:place.lng});
       if(dist<=(list.radius||50)) {
-        checkNotifyPinned(place,list,dist);
+        if(!closest || dist < closest.dist) closest = {place, dist};
       }
     });
+    if(closest) checkNotifyPinned(closest.place, list, closest.dist);
   });
   // Agregar marcadores de fijos al mapa si está abierto
   if (map) {
