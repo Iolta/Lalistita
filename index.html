@@ -1337,12 +1337,28 @@ let swRegistration=null;
 async function registerSW(){
   if (!('serviceWorker' in navigator)) return;
   try {
-    // Limpiar SWs viejos primero
-    const regs = await navigator.serviceWorker.getRegistrations();
-    for (const reg of regs) await reg.unregister();
-    // Registrar nuevo
+    // Reusar SW existente si ya está activo
     swRegistration = await navigator.serviceWorker.register('sw.js');
+    // Esperar a que esté activo
+    if (swRegistration.installing) {
+      await new Promise(resolve => {
+        swRegistration.installing.addEventListener('statechange', function() {
+          if (this.state === 'activated') resolve();
+        });
+      });
+    }
+    // Asegurarse de tener la referencia activa
+    if (!swRegistration.active) {
+      swRegistration = await navigator.serviceWorker.ready;
+    }
   } catch(e) { console.log('SW error:', e); }
+}
+
+// Escuchar mensajes del SW (ej: hablar cuando la página está en background)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'SPEAK') speakNotification(e.data.text);
+  });
 }
 
 // ── NOTIFICACIONES ──
