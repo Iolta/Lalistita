@@ -556,9 +556,14 @@
 const SYMBOLS = ['⚒','◉','⊞','✂','⊛','⌘','⚗','⊕','⊜','⌂','⊟','⍟','∞','⌬','⊡'];
 
 const DEFAULT_LISTS = [
-  { id:'ferreteriaList', name:'Ferretería', emoji:'⚒', mode:'search', pinnedPlaces:[], keywords:['ferretería','ferreteria','hardware','pinturería'], items:[], radius:50 },
-  { id:'farmaciaList',   name:'Farmacia',   emoji:'◉', mode:'search', pinnedPlaces:[], keywords:['farmacia','droguería','pharmacy'], items:[], radius:50 },
-  { id:'supermercadoList',name:'Supermercado',emoji:'⊞',mode:'search',pinnedPlaces:[],keywords:['supermercado','supermarket','almacén','mercado','disco','jumbo','carrefour','coto','dia'],items:[],radius:50 },
+  { id:'ferreteriaList',  name:'Ferretería',   emoji:'⚒', mode:'search', pinnedPlaces:[], placeTypes:['hardware_store'],                         keywords:['ferretería','ferreteria','pinturería','pintumix'], items:[], radius:50 },
+  { id:'farmaciaList',    name:'Farmacia',     emoji:'◉', mode:'search', pinnedPlaces:[], placeTypes:['pharmacy'],                               keywords:['farmacia','farmacity'], items:[], radius:50 },
+  { id:'libreriaList',    name:'Librería',     emoji:'✎', mode:'search', pinnedPlaces:[], placeTypes:['book_store'],                             keywords:['librería','libreria','papelería','papeleria'], items:[], radius:50 },
+  { id:'merceriaList',    name:'Mercería',     emoji:'✂', mode:'search', pinnedPlaces:[], placeTypes:[],                                         keywords:['mercería','merceria','lanas','telas','botones','zippers','hilos'], items:[], radius:50 },
+  { id:'limpiezaList',    name:'Limpieza',     emoji:'⊛', mode:'search', pinnedPlaces:[], placeTypes:[],                                         keywords:['limpieza','casa de limpieza','detergentes','todo limpio','el limpiador','la escoba','bazar limpieza','insumos limpieza'], items:[], radius:50 },
+  { id:'perfumeriaList',  name:'Perfumería',   emoji:'⊜', mode:'search', pinnedPlaces:[], placeTypes:['beauty_salon','cosmetics_store'],          keywords:['perfumería','perfumeria','cosméticos','cosmeticos','natura','avon','arredo','dulce vida','pigmento','pom','don perfume','full beauty','glamour','la botica','beautik','essen'], items:[], radius:50 },
+  { id:'supermercadoList',name:'Supermercado', emoji:'⊞', mode:'search', pinnedPlaces:[], placeTypes:['supermarket','grocery_or_supermarket'],    keywords:['supermercado','almacén','disco','jumbo','carrefour','coto','dia','walmart','changomas'], items:[], radius:50 },
+  { id:'veterinariaList', name:'Veterinaria',  emoji:'⊕', mode:'search', pinnedPlaces:[], placeTypes:['veterinary_care','pet_store'],             keywords:['veterinaria','veterinario','petshop','pet shop','zoonosis'], items:[], radius:50 },
 ];
 
 let state = {
@@ -591,9 +596,11 @@ function load() {
           else l.placeTypes=[];
         }
       });
-      // Si solo tiene las 3 listas viejas sin ítems, migrar a las 8 nuevas
-      const hasOnlyOld3 = state.lists.length===3 && state.lists.every(l=>!l.items.length);
-      if (hasOnlyOld3) state.lists = DEFAULT_LISTS;
+      // Agregar listas nuevas que no existan todavía
+      const existingIds = new Set(state.lists.map(l=>l.id));
+      DEFAULT_LISTS.forEach(dl => {
+        if (!existingIds.has(dl.id)) state.lists.push({...dl});
+      });
     } else {
       state.lists = DEFAULT_LISTS;
     }
