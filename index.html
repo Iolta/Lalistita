@@ -583,7 +583,17 @@ function load() {
         if (!l.mode) l.mode = 'search';
         if (!l.pinnedPlaces) l.pinnedPlaces = [];
         if (!l.radius) l.radius = 50;
+        if (!l.placeTypes) {
+          // Migrar listas viejas con placeTypes
+          if (l.id==='ferreteriaList') l.placeTypes=['hardware_store'];
+          else if (l.id==='farmaciaList') l.placeTypes=['pharmacy'];
+          else if (l.id==='supermercadoList') l.placeTypes=['supermarket','grocery_or_supermarket'];
+          else l.placeTypes=[];
+        }
       });
+      // Si solo tiene las 3 listas viejas sin ítems, migrar a las 8 nuevas
+      const hasOnlyOld3 = state.lists.length===3 && state.lists.every(l=>!l.items.length);
+      if (hasOnlyOld3) state.lists = DEFAULT_LISTS;
     } else {
       state.lists = DEFAULT_LISTS;
     }
@@ -1078,7 +1088,7 @@ function searchNearby(force=false) {
   const service=new google.maps.places.PlacesService(serviceMap);
   const searchRadius=Math.max(...state.lists.map(l=>l.radius||50));
   const center=new google.maps.LatLng(state.userPos.lat,state.userPos.lng);
-  let allPlaces=[]; let pending=3;
+  let allPlaces=[]; let pending=7;
 
   const onResults=(results,status)=>{
     if(results&&status==='OK') allPlaces=allPlaces.concat(results);
@@ -1107,7 +1117,7 @@ function searchNearby(force=false) {
       updateNearbyChips(); updateStatusBar();
     }
   };
-  ['pharmacy','hardware_store','supermarket'].forEach(type=>{
+  ['pharmacy','hardware_store','supermarket','book_store','beauty_salon','veterinary_care','pet_store'].forEach(type=>{
     service.nearbySearch({location:center,radius:searchRadius,type},onResults);
   });
 }
@@ -1158,14 +1168,21 @@ function checkNotifyPinned(place, list, dist) {
   sendNativeNotification(list,place.name);
 }
 
-function matchPlaceToList(place,lists) {
-  const name=(place.name||'').toLowerCase();
-  const types=place.types||[];
-  for(const list of lists){
-    if((list.keywords||[]).some(k=>name.includes(k)))return list;
-    if(types.includes('pharmacy')&&list.id==='farmaciaList')return list;
-    if(types.includes('hardware_store')&&list.id==='ferreteriaList')return list;
-    if((types.includes('supermarket')||types.includes('grocery_or_supermarket'))&&list.id==='supermercadoList')return list;
+// Palabras que siempre excluyen un local (mayoristas, distribuidoras)
+const ALWAYS_EXCLUDE = ['mayorista','wholesale','distribuidora','distribuidor','depósito','deposito','laboratorio','fábrica','fabrica','cash & carry','cash and carry'];
+
+function matchPlaceToList(place, lists) {
+  const name = (place.name||'').toLowerCase();
+  const types = place.types||[];
+
+  // Excluir mayoristas/distribuidoras de cualquier lista
+  if (ALWAYS_EXCLUDE.some(w => name.includes(w))) return null;
+
+  for (const list of lists) {
+    // Keywords del usuario — prioridad máxima
+    if ((list.keywords||[]).some(k => k && name.includes(k))) return list;
+    // Tipos de Places configurados en la lista
+    if ((list.placeTypes||[]).some(t => types.includes(t))) return list;
   }
   return null;
 }
