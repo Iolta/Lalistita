@@ -1070,7 +1070,7 @@ function searchNearby(force=false) {
   const expired=(now-placeCache.timestamp)>SEARCH_CACHE_TTL;
 
   if (!force&&!movedFar&&!expired&&placeCache.places.length) {
-    const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done));
+    const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done) && (l.mode==='search' || !l.pinnedPlaces?.length));
     const closestPerList = {};
     placeCache.places.forEach(place=>{
       if(!place.geometry) return;
@@ -1088,8 +1088,8 @@ function searchNearby(force=false) {
 
   placeMarkers.forEach(m=>m.setMap(null));
   placeMarkers=[]; state.nearbyPlaces=[];
-  // Buscar para listas en modo search, O listas en modo pinned sin locales vinculados
-  const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done));
+  // Solo buscar listas en modo search, o pinned SIN local vinculado
+  const listsSearch=state.lists.filter(l=>l.items.some(i=>!i.done) && (l.mode==='search' || !l.pinnedPlaces?.length));
   if (!listsSearch.length) { updateStatusBar(); return; }
 
   const service=new google.maps.places.PlacesService(serviceMap);
