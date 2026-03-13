@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lalistita-v7';
+const CACHE_NAME = 'lalistita-v8';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -13,37 +13,29 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// No caching — always fetch fresh
 self.addEventListener('fetch', e => {
   e.respondWith(fetch(e.request).catch(() => new Response('offline')));
 });
 
 self.addEventListener('message', e => {
   if (e.data?.type === 'NOTIFY_NEARBY') {
-    const { listName, listEmoji, placeName, items, speakText } = e.data;
+    const { listName, listEmoji, placeName, placeId, listId, items, speakText } = e.data;
     const body = items.slice(0, 4).join('\n') + (items.length > 4 ? `\n…y ${items.length - 4} más` : '');
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}${placeId ? '&query_place_id=' + placeId : ''}`;
 
     e.waitUntil(
       self.registration.showNotification(`${listEmoji} ${listName} cerca`, {
         body: `📍 ${placeName}\n${body}`,
         icon: 'icon-192.png',
         badge: 'icon-192.png',
-        tag: `lalistita-${listName}`,
+        tag: `lalistita-${listId}`,
         renotify: true,
-        vibrate: [300, 100, 300, 100, 300],
         silent: false,
-        data: { url: self.registration.scope, speakText },
+        data: { scope: self.registration.scope, mapsUrl, listId },
         actions: [
-          { action: 'open', title: 'Ver lista' },
-          { action: 'dismiss', title: 'Ignorar' }
+          { action: 'ir', title: 'Ir →' },
+          { action: 'ver', title: 'Ver lista' }
         ]
-      }).then(() => {
-        // Relay speak message to page if open
-        return self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      }).then(clients => {
-        clients.forEach(client => {
-          client.postMessage({ type: 'SPEAK', text: speakText });
-        });
       })
     );
   }
@@ -51,11 +43,25 @@ self.addEventListener('message', e => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  if (e.action === 'dismiss') return;
+  const { scope, mapsUrl, listId } = e.notification.data || {};
+
+  if (e.action === 'ir' && mapsUrl) {
+    e.waitUntil(clients.openWindow(mapsUrl));
+    return;
+  }
+
+  // 'ver' o click directo — abrir/enfocar la app
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      if (list.length) return list[0].focus();
-      return clients.openWindow(self.registration.scope);
+      // Buscar una ventana de la app ya abierta
+      const appClient = list.find(c => c.url.includes('Lalistita'));
+      if (appClient) {
+        appClient.focus();
+        if (listId) appClient.postMessage({ type: 'SWITCH_LIST', listId });
+        return;
+      }
+      // Si no está abierta, abrirla
+      return clients.openWindow(scope || '/Lalistita/');
     })
   );
 });

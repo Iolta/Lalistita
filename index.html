@@ -1177,7 +1177,7 @@ function checkNotifyPinned(place, list, dist) {
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
   state.nearbyAlert[list.id] = {placeName:place.name, placeId:place.place_id, dist:distLabel};
   showToastWithGo(list.emoji,`${list.name} — ${place.name} (${distLabel})`,items,place.place_id,place.name,list.id);
-  sendNativeNotification(list,place.name);
+  sendNativeNotification(list,place.name,place.place_id);
 }
 
 // Palabras que siempre excluyen un local (mayoristas, distribuidoras)
@@ -1225,7 +1225,7 @@ function checkNotify(place,list) {
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
   state.nearbyAlert[list.id] = {placeName:place.name, placeId:place.place_id};
   showToastWithGo(list.emoji,`${list.name} cerca — ${place.name}`,items,place.place_id,place.name,list.id);
-  sendNativeNotification(list,place.name);
+  sendNativeNotification(list,place.name,place.place_id);
 }
 
 function updateNearbyChips() {
@@ -1338,7 +1338,8 @@ async function registerSW(){
   if (!('serviceWorker' in navigator)) return;
   try {
     // Reusar SW existente si ya está activo
-    swRegistration = await navigator.serviceWorker.register('sw.js');
+    swRegistration = await navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'});
+    swRegistration.update(); // forzar chequeo de versión nueva
     // Esperar a que esté activo
     if (swRegistration.installing) {
       await new Promise(resolve => {
@@ -1358,6 +1359,7 @@ async function registerSW(){
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.type === 'SPEAK') speakNotification(e.data.text);
+    if (e.data?.type === 'SWITCH_LIST') switchList(e.data.listId);
   });
 }
 
@@ -1367,15 +1369,40 @@ async function requestNotificationPermission(){
   if(Notification.permission==='granted')return true;
   return(await Notification.requestPermission())==='granted';
 }
-function sendNativeNotification(list,placeName){
+async function sendNativeNotification(list,placeName,placeId=""){
   const pending=list.items.filter(i=>!i.done);
   if(!pending.length)return;
   const items=pending.map(i=>`• ${i.name}`);
-  if(swRegistration?.active){
-    swRegistration.active.postMessage({type:'NOTIFY_NEARBY',listName:list.name,listEmoji:list.emoji,placeName,items});
-  } else if(Notification.permission==='granted'){
-    new Notification(`${list.emoji} ${list.name} cerca`,{body:`📍 ${placeName}\n${items.slice(0,3).join('\n')}`,tag:`lalistita-${list.id}`,renotify:true});
+  const speakText=`${list.name} en ${placeName}`;
+  // Conseguir SW activo si no lo tenemos
+  if(!swRegistration?.active && 'serviceWorker' in navigator){
+    try { swRegistration = await navigator.serviceWorker.ready; } catch(e){}
   }
+  if(swRegistration?.active){
+    swRegistration.active.postMessage({
+      type:'NOTIFY_NEARBY',
+      listName:list.name, listEmoji:list.emoji, listId:list.id,
+      placeName, placeId, items, speakText
+    });
+  } else if(Notification.permission==='granted'){
+    new Notification(`${list.emoji} ${list.name} cerca`,{
+      body:`📍 ${placeName}\n${items.slice(0,3).join('\n')}`,
+      tag:`lalistita-${list.id}`, renotify:true,
+      vibrate:[300,100,300,100,300]
+    });
+  }
+  // Audio — funciona con auriculares, requiere que la página haya tenido interacción
+  speakNotification(speakText);
+}
+
+function speakNotification(text){
+  if(!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'es-AR';
+  utt.rate = 0.9;
+  utt.volume = 1;
+  window.speechSynthesis.speak(utt);
 }
 
 // ── INSTALL PROMPT ──
