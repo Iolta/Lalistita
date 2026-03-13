@@ -189,14 +189,15 @@
 
   .sidebar-new {
     padding: 10px 12px;
-    font-size: 0.75rem;
-    color: var(--rule);
+    font-size: 0.72rem;
+    color: var(--muted);
     cursor: pointer;
     transition: color .15s;
-    border-top: 1px dashed var(--rule);
+    border-top: 1px solid var(--rule);
     margin-top: auto;
+    font-weight: 500;
   }
-  .sidebar-new:active { color: var(--muted); }
+  .sidebar-new:active { color: var(--ink); }
 
   /* radar inside sidebar bottom */
   .sidebar-radar {
@@ -471,9 +472,10 @@
 </header>
 
 <!-- Status bar — mapa colapsado -->
-<div id="status-bar" onclick="toggleMap()">
-  <span id="status-text" style="color:var(--muted)">// tocá para activar el mapa</span>
-  <span id="status-expand">▾</span>
+<div id="status-bar">
+  <span id="status-text" style="color:var(--muted);cursor:pointer;flex:1" onclick="toggleMap()">// tocá para activar el mapa</span>
+  <button id="btn-search-now" onclick="searchNow()" style="background:none;border:1px solid var(--rule);border-radius:3px;padding:2px 8px;font-family:var(--mono);font-size:0.65rem;color:var(--muted);cursor:pointer;margin-right:6px;display:none">⊙ buscar</button>
+  <span id="status-expand" style="cursor:pointer" onclick="toggleMap()">▾</span>
 </div>
 
 <!-- Mapa colapsable -->
@@ -683,7 +685,6 @@ function renderList() {
         <span class="md-comment">// lista vacía</span><br>
         <span class="md-comment">// agregá lo que necesitás</span>
       </div>`:''}
-    <button class="new-list-btn" onclick="showModal()">crear nueva lista</button>
   `;
 }
 
@@ -947,6 +948,7 @@ function fallbackGeo(label) {
 function setGeoActive(label) {
   document.getElementById('geo-dot').classList.add('active');
   document.getElementById('geo-label').textContent=label;
+  const sb = document.getElementById('btn-search-now'); if(sb) sb.style.display='block';
 }
 
 window.onMapsScriptLoaded = function() {
@@ -996,6 +998,17 @@ window.toggleMap = function() {
     }
   }
 };
+
+function searchNow() {
+  const btn = document.getElementById('btn-search-now');
+  if (btn) { btn.textContent = '// buscando...'; btn.disabled = true; }
+  placeCache = {pos:null, timestamp:0, places:[]};
+  state.notified = {};
+  searchNearby(true);
+  setTimeout(() => {
+    if (btn) { btn.textContent = '⊙ buscar'; btn.disabled = false; }
+  }, 3000);
+}
 
 function updateStatusBar() {
   const el=document.getElementById('status-text');
