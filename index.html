@@ -383,6 +383,24 @@
   .btn-pin-it { background: var(--accent); color: var(--paper); border: none; border-radius: 3px; padding: 4px 9px; font-family: var(--mono); font-size: 0.7rem; cursor: pointer; }
 
   .gm-style .gm-style-iw-c { border-radius: 4px !important; }
+
+  /* ── NEARBY ALERT in list ── */
+  .nearby-alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    padding: 7px 10px;
+    margin-bottom: 12px;
+    font-size: 0.72rem;
+    font-family: var(--mono);
+    color: var(--ink2);
+  }
+  .nearby-alert-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; animation: pulse 2s infinite; }
+  .nearby-alert-name { flex: 1; }
+  .nearby-alert-dist { color: var(--muted); font-size: 0.65rem; margin-right: 4px; }
+  .btn-nearby-go { background: var(--ink); color: var(--paper); border: none; border-radius: 3px; padding: 4px 9px; font-family: var(--mono); font-size: 0.68rem; cursor: pointer; flex-shrink: 0; }
   /* ── COMPOSE BAR (fixed bottom, survives keyboard) ── */
   #compose-bar {
     position: fixed;
@@ -446,9 +464,12 @@
 
 <header>
   <div class="logo">Lalistita</div>
-  <div style="display:flex;align-items:center;gap:6px;font-size:0.7rem;font-family:var(--mono);color:var(--muted)">
-    <div class="dot" id="geo-dot"></div>
-    <span id="geo-label">sin ubicación</span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <button onclick="toggleHistory()" id="history-btn" style="background:none;border:none;font-family:var(--mono);font-size:0.7rem;color:var(--muted);cursor:pointer;padding:2px 6px;border:1px solid var(--rule);border-radius:3px">// historial</button>
+    <div style="display:flex;align-items:center;gap:6px;font-size:0.7rem;font-family:var(--mono);color:var(--muted)">
+      <div class="dot" id="geo-dot"></div>
+      <span id="geo-label">sin ubicación</span>
+    </div>
   </div>
 </header>
 
@@ -492,6 +513,15 @@
 <div id="compose-bar">
   <input id="compose-input" placeholder="agregar ítem..." onkeydown="if(event.key==='Enter')addItem()">
   <button id="compose-btn" onpointerdown="event.preventDefault();addItem()">↵</button>
+</div>
+
+<!-- Historial de notificaciones -->
+<div id="history-panel" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:300;overflow-y:auto;padding:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;border-bottom:2px solid var(--ink);padding-bottom:10px">
+    <div style="font-family:var(--serif);font-style:italic;font-size:1.1rem">// historial</div>
+    <button onclick="toggleHistory()" style="background:none;border:none;font-family:var(--mono);font-size:0.8rem;color:var(--muted);cursor:pointer">✕ cerrar</button>
+  </div>
+  <div id="history-list"></div>
 </div>
 
 <div id="toast-container"></div>
@@ -543,7 +573,8 @@ const DEFAULT_LISTS = [
 
 let state = {
   lists:[], activeList:null,
-  userPos:null, nearbyPlaces:[], notified:{},
+  userPos:null, nearbyPlaces:[], notified:{}, history:{},
+  nearbyAlert:{}, // listId -> {placeName, placeId, dist} — se limpia al resetear notified
 };
 let map=null, userMarker=null, placeMarkers=[], mapExpanded=false;
 let pinningListId = null;
@@ -619,6 +650,15 @@ function renderList() {
       </div>`;
   }
 
+  const alert = state.nearbyAlert[list.id];
+  const alertHTML = alert ? `
+    <div class="nearby-alert">
+      <div class="nearby-alert-dot"></div>
+      <span class="nearby-alert-name">${escapeHTML(alert.placeName)}</span>
+      ${alert.dist ? `<span class="nearby-alert-dist">${alert.dist}</span>` : ''}
+      <button class="btn-nearby-go" onclick="goToPlace('${alert.placeId}','${escapeHTML(alert.placeName)}','${list.id}')">ir →</button>
+    </div>` : '';
+
   c.innerHTML = `
     <div class="list-header">
       <div class="list-title"><span class="sym">${list.emoji}</span>${escapeHTML(list.name)}</div>
@@ -626,6 +666,7 @@ function renderList() {
         ${isPinned?'⊕ fijo':'⊙ búsqueda'}
       </button>
     </div>
+    ${alertHTML}
     ${pinnedHTML}
     <div class="list-radius">
       <span>// radio</span>
@@ -1034,7 +1075,7 @@ function searchNearby(force=false) {
   const service=new google.maps.places.PlacesService(serviceMap);
   const searchRadius=Math.max(...state.lists.map(l=>l.radius||50));
   const center=new google.maps.LatLng(state.userPos.lat,state.userPos.lng);
-  let allPlaces=[]; let pending=4;
+  let allPlaces=[]; let pending=3;
 
   const onResults=(results,status)=>{
     if(results&&status==='OK') allPlaces=allPlaces.concat(results);
@@ -1063,7 +1104,7 @@ function searchNearby(force=false) {
       updateNearbyChips(); updateStatusBar();
     }
   };
-  ['pharmacy','hardware_store','supermarket','grocery_or_supermarket'].forEach(type=>{
+  ['pharmacy','hardware_store','supermarket'].forEach(type=>{
     service.nearbySearch({location:center,radius:searchRadius,type},onResults);
   });
 }
@@ -1108,6 +1149,8 @@ function checkNotifyPinned(place, list, dist) {
   state.notified[key]=true;
   const distLabel=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
   const items=pending.slice(0,4).map(i=>`• ${i.name}`).join('\n')+(pending.length>4?`\n…y ${pending.length-4} más`:'');
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  state.nearbyAlert[list.id] = {placeName:place.name, placeId:place.place_id, dist:distLabel};
   showToastWithGo(list.emoji,`${list.name} — ${place.name} (${distLabel})`,items,place.place_id,place.name,list.id);
   sendNativeNotification(list,place.name);
 }
@@ -1134,7 +1177,7 @@ function addPlaceMarker(place,matchedList) {
   placeMarkers.push(marker);
   if(matchedList){
     const iw=new google.maps.InfoWindow({content:`<div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 8px;color:#1a1a18"><strong>${matchedList.emoji} ${matchedList.name}</strong><br>${place.name}<br><span style="color:#8a8578">${matchedList.items.filter(i=>!i.done).length} pendientes</span></div>`});
-    marker.addListener('click',()=>iw.open(map,marker));
+    marker.addListener('click',()=>{ iw.open(map,marker); switchList(matchedList.id); });
   }
 }
 
@@ -1146,6 +1189,7 @@ function checkNotify(place,list) {
   state.notified[key]=true;
   const items=pending.slice(0,4).map(i=>`• ${i.name}`).join('\n')+(pending.length>4?`\n…y ${pending.length-4} más`:'');
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  state.nearbyAlert[list.id] = {placeName:place.name, placeId:place.place_id};
   showToastWithGo(list.emoji,`${list.name} cerca — ${place.name}`,items,place.place_id,place.name,list.id);
   sendNativeNotification(list,place.name);
 }
@@ -1304,6 +1348,46 @@ async function installApp(){
   if(outcome==='accepted')showToast('🎉','instalada','lalistita ya está en tu pantalla de inicio',4000);
 }
 window.addEventListener('appinstalled',()=>showToast('🎉','listo','lalistita instalada correctamente',4000));
+
+// ── HISTORIAL ──
+function toggleHistory() {
+  const panel = document.getElementById('history-panel');
+  const isOpen = panel.style.display !== 'none';
+  if (!isOpen) renderHistory();
+  panel.style.display = isOpen ? 'none' : 'block';
+}
+
+function renderHistory() {
+  const c = document.getElementById('history-list');
+  if (!state.history.length) {
+    c.innerHTML = '<div style="font-size:0.78rem;color:var(--rule);font-family:var(--mono)">// sin notificaciones aún</div>';
+    return;
+  }
+  c.innerHTML = state.history.map(h => {
+    const ago = formatAgo(h.ts);
+    return `<div style="padding:10px 0;border-bottom:1px dashed var(--rule);font-family:var(--mono)">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+        <span style="font-size:0.9rem">${h.emoji}</span>
+        <span style="font-size:0.8rem;color:var(--ink);font-weight:500">${escapeHTML(h.listName)}</span>
+        <span style="font-size:0.68rem;color:var(--muted);flex:1">${escapeHTML(h.placeName)}</span>
+        <span style="font-size:0.65rem;color:var(--rule)">${ago}</span>
+      </div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-bottom:6px">${h.items.map(i=>'• '+escapeHTML(i)).join(' · ')}</div>
+      <button onclick="switchList('${h.listId}');toggleHistory()" style="background:none;border:1px solid var(--rule);border-radius:3px;padding:3px 8px;font-family:var(--mono);font-size:0.68rem;color:var(--muted);cursor:pointer;margin-right:6px">ver lista</button>
+      <button onclick="goToPlace('${h.placeId}','${escapeHTML(h.placeName)}',null)" style="background:var(--ink);color:var(--paper);border:none;border-radius:3px;padding:3px 8px;font-family:var(--mono);font-size:0.68rem;cursor:pointer">ir →</button>
+    </div>`;
+  }).join('');
+}
+
+function formatAgo(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff/60000);
+  if (m < 1) return 'ahora';
+  if (m < 60) return m+'min';
+  const h = Math.floor(m/60);
+  if (h < 24) return h+'h';
+  return Math.floor(h/24)+'d';
+}
 
 // ── INIT ──
 load(); state.notified={}; render(); registerSW(); requestNotificationPermission();
