@@ -597,10 +597,20 @@ function load() {
           else l.placeTypes=[];
         }
       });
-      // Agregar listas nuevas que no existan todavía
+      // Agregar listas nuevas que no existan todavía + actualizar emoji/searchTerm/placeTypes
       const existingIds = new Set(state.lists.map(l=>l.id));
       DEFAULT_LISTS.forEach(dl => {
-        if (!existingIds.has(dl.id)) state.lists.push({...dl});
+        if (!existingIds.has(dl.id)) {
+          state.lists.push({...dl});
+        } else {
+          // Actualizar emoji y searchTerm de listas existentes
+          const existing = state.lists.find(l=>l.id===dl.id);
+          if (existing) {
+            existing.emoji = dl.emoji;
+            if (!existing.searchTerm) existing.searchTerm = dl.searchTerm;
+            if (!existing.placeTypes) existing.placeTypes = dl.placeTypes;
+          }
+        }
       });
     } else {
       state.lists = DEFAULT_LISTS;
@@ -704,7 +714,7 @@ function renderList() {
         <span class="md-comment">// agregá lo que necesitás</span>
       </div>`:''}
     <div style="border-top:1px dashed var(--rule);margin-top:20px;padding-top:10px;text-align:right;">
-      <button onclick="deleteList('${list.id}')" style="background:none;border:none;font-family:var(--mono);font-size:0.65rem;color:var(--rule);cursor:pointer;padding:2px 4px;">✕ eliminar lista</button>
+      <button onclick="deleteList('${list.id}')" style="background:none;border:none;font-family:var(--mono);font-size:0.65rem;color:var(--muted);cursor:pointer;padding:2px 4px;">✕ eliminar lista</button>
     </div>
     ${(()=>{const ls=state.lastSuggested[list.id];return ls?`
     <div style="border-top:1px dashed var(--rule);margin-top:16px;padding-top:10px;">
