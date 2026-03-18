@@ -323,7 +323,7 @@
   .item-check:active { color: var(--accent); }
   .item.done .item-check { color: var(--accent); }
   .item-name { flex: 1; font-family: var(--mono); font-size: 0.85rem; color: var(--ink2); line-height: 1.6; }
-  .item-del { background: none; border: none; color: var(--rule); cursor: pointer; font-family: var(--mono); font-size: 0.7rem; padding: 0 6px; opacity: 0.4; transition: opacity .15s; }
+  .item-del { background: none; border: none; color: #a05040; cursor: pointer; font-family: var(--mono); font-size: 0.7rem; padding: 0 6px; opacity: 0.6; transition: opacity .15s; }
   .item:hover .item-del { opacity: 1; }
   .item-del:active { color: var(--red); opacity: 1; }
 
@@ -569,7 +569,8 @@ const DEFAULT_LISTS = [
 let state = {
   lists:[], activeList:null,
   userPos:null, nearbyPlaces:[], notified:{},
-  nearbyAlert:{}, // listId -> {placeName, placeId, dist} — se limpia al resetear notified
+  nearbyAlert:{}, // listId -> {placeName, placeId, dist}
+  lastSuggested:{}, // listId -> {placeName, placeId}
 };
 let map=null, userMarker=null, placeMarkers=[], mapExpanded=false;
 let pinningListId = null;
@@ -702,6 +703,17 @@ function renderList() {
         <span class="md-comment">// lista vacía</span><br>
         <span class="md-comment">// agregá lo que necesitás</span>
       </div>`:''}
+    <div style="border-top:1px dashed var(--rule);margin-top:20px;padding-top:10px;text-align:right;">
+      <button onclick="deleteList('${list.id}')" style="background:none;border:none;font-family:var(--mono);font-size:0.65rem;color:var(--rule);cursor:pointer;padding:2px 4px;">✕ eliminar lista</button>
+    </div>
+    ${(()=>{const ls=state.lastSuggested[list.id];return ls?`
+    <div style="border-top:1px dashed var(--rule);margin-top:16px;padding-top:10px;">
+      <div style="font-size:0.6rem;color:var(--rule);letter-spacing:1px;margin-bottom:6px;">// último sugerido</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:0.72rem;color:var(--muted);flex:1;">${escapeHTML(ls.placeName)}</span>
+        <button onclick="blockPlace('${list.id}','${ls.placeId}','${escapeHTML(ls.placeName).replace(/'/g,"\'")}')" style="background:#f7ddd8;border:1px solid #edc4bc;border-radius:3px;padding:3px 8px;font-family:var(--mono);font-size:0.65rem;color:#a05040;cursor:pointer;">bloquear</button>
+      </div>
+    </div>`:''})()}
   `;
 }
 
@@ -709,7 +721,7 @@ function itemHTML(item) {
   return `<li class="item ${item.done?'done':''}" id="item-${item.id}">
     <span class="item-check" onclick="toggleItem('${item.id}')">${item.done?'[x]':'[ ]'}</span>
     <span class="item-name">${escapeHTML(item.name)}</span>
-    <button class="item-del" onclick="deleteItem('${item.id}')">~~del~~</button>
+    <button class="item-del" onclick="deleteItem('${item.id}')">quitar</button>
   </li>`;
 }
 function escapeHTML(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1115,6 +1127,8 @@ function searchNearby(force=false) {
         addPlaceMarker(place, match && dist<=(match.radius||50) ? match : null);
         if(!match) return;
         if(dist>(match.radius||50)) return;
+        // Saltar locales bloqueados
+        if((match.blockedPlaces||[]).find(b=>b.placeId===place.place_id)) return;
         if(!closestPerList[match.id] || dist < closestPerList[match.id].dist) {
           closestPerList[match.id] = {place, list: match, dist};
         }
@@ -1176,6 +1190,7 @@ function checkNotifyPinned(place, list, dist) {
   const items=pending.slice(0,4).map(i=>`• ${i.name}`).join('\n')+(pending.length>4?`\n…y ${pending.length-4} más`:'');
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
   state.nearbyAlert[list.id] = {placeName:place.name, placeId:place.place_id, dist:distLabel};
+  state.lastSuggested[list.id] = {placeName:place.name, placeId:place.place_id};
   showToastWithGo(list.emoji,`${list.name} — ${place.name} (${distLabel})`,items,place.place_id,place.name,list.id);
   sendNativeNotification(list,place.name,place.place_id);
 }
@@ -1224,6 +1239,7 @@ function checkNotify(place,list) {
   const items=pending.slice(0,4).map(i=>`• ${i.name}`).join('\n')+(pending.length>4?`\n…y ${pending.length-4} más`:'');
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
   state.nearbyAlert[list.id] = {placeName:place.name, placeId:place.place_id};
+  state.lastSuggested[list.id] = {placeName:place.name, placeId:place.place_id};
   showToastWithGo(list.emoji,`${list.name} cerca — ${place.name}`,items,place.place_id,place.name,list.id);
   sendNativeNotification(list,place.name,place.place_id);
 }
@@ -1307,6 +1323,26 @@ function hideModal(){document.getElementById('modal').style.display='none';}
 function closeModal(e){if(e.target.id==='modal')hideModal();}
 function selectSym(s,el){selectedSym=s;document.querySelectorAll('.sym-opt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
 function selectMode(m,el){selectedMode=m;document.querySelectorAll('.mode-opt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
+function blockPlace(listId, placeId, placeName) {
+  const list = state.lists.find(l => l.id === listId);
+  if (!list) return;
+  if (!list.blockedPlaces) list.blockedPlaces = [];
+  if (!list.blockedPlaces.find(p => p.placeId === placeId)) {
+    list.blockedPlaces.push({placeId, placeName});
+  }
+  delete state.lastSuggested[listId];
+  delete state.nearbyAlert[listId];
+  save(); renderList();
+  showToast('✕', `${placeName} bloqueado`, 'no se volverá a sugerir', 3000);
+}
+
+function deleteList(id) {
+  if (!confirm('¿Eliminar esta lista y todos sus ítems? Esta acción no se puede deshacer.')) return;
+  state.lists = state.lists.filter(l => l.id !== id);
+  if (state.activeList === id) state.activeList = state.lists[0]?.id || null;
+  save(); render();
+}
+
 function createList(){
   const name=document.getElementById('new-list-name').value.trim();
   if(!name)return;
