@@ -553,17 +553,21 @@
 </div>
 
 <script>
-const SYMBOLS = ['⚒','◉','⊞','✂','⊛','⌘','⚗','⊕','⊜','⌂','⊟','⍟','∞','⌬','⊡'];
+const SYMBOLS = ['⚙︎','✚︎','⚖︎','⸙︎','✎︎','✂︎','✧︎','✿︎','♞︎','❦︎','⌨︎','⌗︎','∝︎','⤿︎','◬︎','❁︎','○︎','•︎'];
 
 const DEFAULT_LISTS = [
-  { id:'ferreteriaList',  name:'Ferretería',   searchTerm:'ferretería',   emoji:'⚒', mode:'search', pinnedPlaces:[], placeTypes:['hardware_store'],                         keywords:['ferretería','ferreteria','pinturería','pintumix'], items:[], radius:50 },
-  { id:'farmaciaList',    name:'Farmacia',     searchTerm:'farmacia',     emoji:'◉', mode:'search', pinnedPlaces:[], placeTypes:['pharmacy'],                               keywords:['farmacia','farmacity'], items:[], radius:50 },
-  { id:'libreriaList',    name:'Librería',     searchTerm:'librería',     emoji:'✎', mode:'search', pinnedPlaces:[], placeTypes:['book_store'],                             keywords:['librería','libreria','papelería','papeleria'], items:[], radius:50 },
-  { id:'merceriaList',    name:'Mercería',     searchTerm:'mercería',     emoji:'✂', mode:'search', pinnedPlaces:[], placeTypes:[],                                         keywords:['mercería','merceria','lanas','telas','botones','zippers','hilos'], items:[], radius:50 },
-  { id:'limpiezaList',    name:'Limpieza',     searchTerm:'casa de limpieza',     emoji:'⊛', mode:'search', pinnedPlaces:[], placeTypes:[],                                         keywords:['limpieza','casa de limpieza','detergentes','todo limpio','el limpiador','la escoba','bazar limpieza','insumos limpieza'], items:[], radius:50 },
-  { id:'perfumeriaList',  name:'Perfumería',   searchTerm:'perfumería',   emoji:'⊜', mode:'search', pinnedPlaces:[], placeTypes:['beauty_salon','cosmetics_store'],          keywords:['perfumería','perfumeria','cosméticos','cosmeticos','natura','avon','arredo','dulce vida','pigmento','pom','don perfume','full beauty','glamour','la botica','beautik','essen'], items:[], radius:50 },
-  { id:'supermercadoList',name:'Supermercado', searchTerm:'supermercado', emoji:'⊞', mode:'search', pinnedPlaces:[], placeTypes:['supermarket','grocery_or_supermarket'],    keywords:['supermercado','almacén','disco','jumbo','carrefour','coto','dia','walmart','changomas'], items:[], radius:50 },
-  { id:'veterinariaList', name:'Veterinaria',  searchTerm:'veterinaria',  emoji:'⊕', mode:'search', pinnedPlaces:[], placeTypes:['veterinary_care','pet_store'],             keywords:['veterinaria','veterinario','petshop','pet shop','zoonosis'], items:[], radius:50 },
+  { id:'ferreteriaList',  name:'Ferretería',   searchTerm:'ferretería',      emoji:'⚙︎', mode:'search', pinnedPlaces:[], placeTypes:['hardware_store'],                      keywords:['ferretería','ferreteria','pinturería','pintumix'], items:[], radius:50 },
+  { id:'farmaciaList',    name:'Farmacia',     searchTerm:'farmacia',        emoji:'✚︎', mode:'search', pinnedPlaces:[], placeTypes:['pharmacy'],                            keywords:['farmacia','farmacity'], items:[], radius:50 },
+  { id:'supermercadoList',name:'Supermercado', searchTerm:'supermercado',    emoji:'⚖︎', mode:'search', pinnedPlaces:[], placeTypes:['supermarket','grocery_or_supermarket'], keywords:['supermercado','almacén','disco','jumbo','carrefour','coto','dia','walmart','changomas'], items:[], radius:50 },
+  { id:'verdulariaList',  name:'Verdulería',   searchTerm:'verdulería',      emoji:'⸙︎', mode:'search', pinnedPlaces:[], placeTypes:['grocery_or_supermarket'],              keywords:['verdulería','verduleria','frutería','fruteria','verduría','verduria'], items:[], radius:50 },
+  { id:'libreriaList',    name:'Librería',     searchTerm:'librería',        emoji:'✎︎', mode:'search', pinnedPlaces:[], placeTypes:['book_store'],                          keywords:['librería','libreria','papelería','papeleria'], items:[], radius:50 },
+  { id:'merceriaList',    name:'Mercería',     searchTerm:'mercería',        emoji:'✂︎', mode:'search', pinnedPlaces:[], placeTypes:[],                                      keywords:['mercería','merceria','lanas','telas','botones','hilos'], items:[], radius:50 },
+  { id:'limpiezaList',    name:'Limpieza',     searchTerm:'casa de limpieza',emoji:'✧︎', mode:'search', pinnedPlaces:[], placeTypes:[],                                      keywords:['limpieza','casa de limpieza','detergentes','todo limpio','el limpiador','la escoba'], items:[], radius:50 },
+  { id:'perfumeriaList',  name:'Perfumería',   searchTerm:'perfumería',      emoji:'✿︎', mode:'search', pinnedPlaces:[], placeTypes:['beauty_salon','cosmetics_store'],       keywords:['perfumería','perfumeria','cosméticos','natura','avon','arredo','dulce vida','pigmento','pom','don perfume','full beauty','la botica','beautik','essen'], items:[], radius:50 },
+  { id:'veterinariaList', name:'Veterinaria',  searchTerm:'veterinaria',     emoji:'♞︎', mode:'search', pinnedPlaces:[], placeTypes:['veterinary_care','pet_store'],          keywords:['veterinaria','veterinario','petshop','pet shop','zoonosis'], items:[], radius:50 },
+  { id:'dieteticaList',   name:'Dietética',    searchTerm:'dietética',       emoji:'❦︎', mode:'search', pinnedPlaces:[], placeTypes:['health'],                              keywords:['dietética','dietetica','naturista','orgánico','integral'], items:[], radius:50 },
+  { id:'electronicaList', name:'Electrónica',  searchTerm:'electrónica',     emoji:'⌨︎', mode:'search', pinnedPlaces:[], placeTypes:['electronics_store'],                   keywords:['electrónica','electronica','computación','celular','pc','notebook'], items:[], radius:50 },
+  { id:'madereroList',    name:'Corralón',     searchTerm:'corralón',        emoji:'⌗︎', mode:'search', pinnedPlaces:[], placeTypes:['home_goods_store'],                    keywords:['corralón','corralon','maderera','materiales','construcción'], items:[], radius:50 },
 ];
 
 let state = {
